@@ -7,7 +7,7 @@ from functools import wraps
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-import pandas as pd
+import pandas as pd  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ def save_report(filename: Optional[str] = None) -> Callable:
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             res = func(*args, **kwargs)
 
             fname = filename

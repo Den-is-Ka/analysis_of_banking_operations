@@ -5,7 +5,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
-import pandas as pd
+import pandas as pd  # type: ignore
 
 from src.utils import (
     filter_month_to_date,
@@ -23,21 +23,14 @@ logger = logging.getLogger(__name__)
 
 
 def _build_home_payload(df: pd.DataFrame, at: datetime, settings: dict) -> dict[str, Any]:
-    # Приветствие
     greeting = human_greeting(at)
 
     df_cards = df.copy()
-    # последние 4 цифры
     df_cards["last_digits"] = df_cards["card"].apply(last4).fillna("")
-    # считаем траты как сумму модулей отрицательных amount
     df_cards["spent"] = df_cards["amount"].apply(lambda x: -x if x < 0 else 0.0)
 
     cards: list[dict[str, Any]] = []
-    grouped_cards = (
-        df_cards.groupby("last_digits", dropna=False)["spent"]
-        .sum()
-        .reset_index()
-    )
+    grouped_cards = df_cards.groupby("last_digits", dropna=False)["spent"].sum().reset_index()
     for _, row in grouped_cards.iterrows():
         total_spent = float(row["spent"])
         cards.append(
@@ -49,7 +42,6 @@ def _build_home_payload(df: pd.DataFrame, at: datetime, settings: dict) -> dict[
         )
     cards.sort(key=lambda x: x["last_digits"])
 
-    # Топ транзакций
     month_df = filter_month_to_date(df, at)
     if month_df.empty:
         top_transactions: list[dict[str, Any]] = []
@@ -97,4 +89,4 @@ def home_view_with_df(df: pd.DataFrame, dt_str: str, settings_path: str = "user_
     at = parse_dt(dt_str)
     settings = read_user_settings(settings_path)
     payload = _build_home_payload(df, at, settings)
-    return json.dumps(payload,indent=4, ensure_ascii=False)
+    return json.dumps(payload, indent=4, ensure_ascii=False)

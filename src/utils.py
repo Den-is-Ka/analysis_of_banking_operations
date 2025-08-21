@@ -4,17 +4,16 @@ import json
 import logging
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, cast
 
-import pandas as pd
-import requests
-
+import pandas as pd  # type: ignore
+import requests  # type: ignore
 from dotenv import load_dotenv
-load_dotenv()
+# import xlrd  # noqa: F401
 
-# КОНСТАНТЫ
+load_dotenv()
 logger = logging.getLogger(__name__)
 
 DATE_FMT_IN = "%Y-%m-%d %H:%M:%S"
@@ -32,12 +31,14 @@ def parse_dt(dt_str: str) -> datetime:
     """Парсим строку вида 'YYYY-MM-DD HH:MM:SS' в datetime."""
     return datetime.strptime(dt_str, DATE_FMT_IN)
 
+
 def format_date(d: pd.Timestamp | datetime) -> str:
-    """Форматируем дату для JSON-ответа."""
-    return pd.Timestamp(d).strftime(DATE_FMT_OUT)
+    """Форматируем дату в вид DD.MM.YYYY (для JSON-ответов)."""
+    return str(pd.Timestamp(d).strftime(DATE_FMT_OUT))
+
 
 def human_greeting(dt: datetime) -> str:
-    """'Доброе ***** по часу."""
+    """Возвращает приветствие по часу времени."""
     h = dt.hour
     if 5 <= h <= 11:
         return "Доброе утро"
@@ -47,14 +48,17 @@ def human_greeting(dt: datetime) -> str:
         return "Добрый вечер"
     return "Доброй ночи"
 
-def last4(card_text: str) -> str:
-    """Достаём последние 4 цифры из строки с картой."""
+
+def last4(card_text: str | None) -> str:
+    """Достаёт последние 4 цифры из строки с картой."""
     digits = re.sub(r"\D+", "", card_text or "")
     return digits[-4:] if len(digits) >= 4 else digits
+
 
 def start_of_month(dt: datetime) -> datetime:
     """Первый день месяца в 00:00:00."""
     return dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
 
 def filter_month_to_date(df: pd.DataFrame, end_dt: datetime) -> pd.DataFrame:
     """Фильтр транзакций в диапазоне [первое число месяца .. end_dt] включительно."""
@@ -66,34 +70,50 @@ def filter_month_to_date(df: pd.DataFrame, end_dt: datetime) -> pd.DataFrame:
 def get_project_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
+
 def resolve_project_path(rel_or_abs: str | Path) -> Path:
-    """Возвращаем абсолютный путь"""
+    """Возвращаем абсолютный путь от корня проекта."""
     p = Path(rel_or_abs)
     return p if p.is_absolute() else get_project_root() / p
 
 
-def read_user_settings(path: str = "user_settings.json") -> dict:
-    """Читаем настройки. Если файла нет/битый — вернёт DEFAULT_SETTINGS (и предупредит в лог)."""
+def read_user_settings(path: str = "user_settings.json") -> dict[str, Any]:
+    """Читаем настройки. Если файла нет/битый — вернём DEFAULT_SETTINGS (и предупредим в лог)."""
     abs_path = resolve_project_path(path)
     if not abs_path.exists():
         logger.warning(
             "Файл настроек %s не найден — использую значения по умолчанию: %s",
-            abs_path, DEFAULT_SETTINGS
+            abs_path,
+            DEFAULT_SETTINGS,
         )
         return DEFAULT_SETTINGS.copy()
+
     try:
         with open(abs_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+            raw: Any = json.load(f)
     except Exception as e:
         logger.warning("Не удалось прочитать %s (%s) — использую значения по умолчанию", abs_path, e)
         return DEFAULT_SETTINGS.copy()
 
+    # гарантируем словарь
+    if not isinstance(raw, dict):
+        logger.warning("Настройки в %s не словарь — использую значения по умолчанию", abs_path)
+        return DEFAULT_SETTINGS.copy()
+
+    data = cast(dict[str, Any], raw)
     data.setdefault("user_currencies", [])
     data.setdefault("user_stocks", [])
     return data
 
 
 def get_currency_rates(codes: Iterable[str]) -> list[dict[str, Any]]:
+    """
+    Возвращает список словарей [{"currency": "USD", "rate": 73.21}, ...].
+
+    Поддержка:
+    - apilayer: FX_API_URL указывает на apilayer (или FX_PROVIDER=apilayer). Единый ответ с base и rates.
+    - generic: любой URL, принимающий ?symbol=XXX и возвращающий {"rate": ...} (или price/value).
+    """
     url = os.getenv("FX_API_URL", "")
     key = os.getenv("FX_API_KEY", "")
     base = (os.getenv("FX_BASE", "RUB") or "RUB").upper()
@@ -106,7 +126,7 @@ def get_currency_rates(codes: Iterable[str]) -> list[dict[str, Any]]:
 
     try:
         if provider == "apilayer" or "apilayer.com/exchangerates_data" in url:
-            headers = {"apikey": key} if key else {}
+            headers: dict[str, str] = {"apikey": key} if key else {}
             sym = ",".join(sorted(set(codes + ["RUB"])))
             r = requests.get(url, params={"base": base, "symbols": sym}, headers=headers, timeout=10)
             r.raise_for_status()
@@ -123,21 +143,18 @@ def get_currency_rates(codes: Iterable[str]) -> list[dict[str, Any]]:
                 else:
                     rub = float(rates.get("RUB", 0.0) or 0.0)
                     for c in codes:
-                        # если символ совпал с базой ответа — считаем v=1.0
                         v = 1.0 if c == resp_base else float(rates.get(c, 0.0) or 0.0)
                         out.append({"currency": c, "rate": (rub / v) if (rub and v) else 0.0})
                 return out
 
-            # base не RUB — отдаём как есть (но базовую валюту трактуем как 1.0)
-            result = []
+            result: list[dict[str, Any]] = []
             for c in codes:
                 v = 1.0 if c == resp_base else float(rates.get(c, 0.0) or 0.0)
                 result.append({"currency": c, "rate": v})
             return result
 
-        # --- generic: по одной валюте; падение по одной не валит весь список ---
-        result: list[dict[str, Any]] = []
-        headers = {"Authorization": key} if key else None
+        result = []
+        headers = {"Authorization": key} if key else {}
         for c in codes:
             try:
                 rr = requests.get(url, params={"symbol": c}, headers=headers, timeout=10)
@@ -155,14 +172,13 @@ def get_currency_rates(codes: Iterable[str]) -> list[dict[str, Any]]:
         return [{"currency": c, "rate": 0.0} for c in codes]
 
 
-
 def get_stock_prices(tickers: Iterable[str]) -> list[dict[str, Any]]:
     """
     Возвращает [{"stock": "AAPL", "price": 150.12}, ...].
 
     Провайдеры:
-    - twelvedata: STOCKS_API_URL=https://api.twelvedata.com/price (или /quote), ключ -> apikey в query
-      /price: {"price": "<float>"}; /quote: содержит OHLC, можно взять close/last.
+    - Twelve Data: STOCKS_API_URL=https://api.twelvedata.com/price (или /quote), ключ -> apikey в query.
+      /price: {"price":"<float>"}; /quote: может содержать close/last/c.
     - generic: любой URL с ?symbol=..., ключ в Authorization.
     """
     url = os.getenv("STOCKS_API_URL", "")
@@ -193,7 +209,6 @@ def get_stock_prices(tickers: Iterable[str]) -> list[dict[str, Any]]:
     for t in syms:
         try:
             if provider == "twelvedata" or "api.twelvedata.com" in url:
-                # Twelve Data — ключ как ?apikey=...
                 params = {"symbol": t, "apikey": key}
                 if prepost:
                     params["prepost"] = "true"
@@ -201,7 +216,6 @@ def get_stock_prices(tickers: Iterable[str]) -> list[dict[str, Any]]:
                 r.raise_for_status()
                 d = r.json()
 
-                # /price -> {"price":"123.45"}; /quote -> close/last
                 price = None
                 if isinstance(d, dict):
                     if "price" in d:
@@ -213,14 +227,12 @@ def get_stock_prices(tickers: Iterable[str]) -> list[dict[str, Any]]:
                     elif "c" in d:
                         price = float(d["c"] or 0.0)
 
-                    # Ошибка от Twelve Data
                     if d.get("status") == "error":
                         logger.warning("Twelve Data error for %s: %s", t, d.get("message"))
                         price = 0.0
 
                 results.append({"stock": t, "price": float(price or 0.0)})
             else:
-                # generic fallback: ключ в Authorization
                 headers = {"Authorization": key} if key else None
                 r = requests.get(url, params={"symbol": t}, headers=headers, timeout=10)
                 r.raise_for_status()
@@ -234,10 +246,17 @@ def get_stock_prices(tickers: Iterable[str]) -> list[dict[str, Any]]:
     return results
 
 
-
 def load_transactions_xlsx(path: str | Path) -> pd.DataFrame:
-    """Читает Excel/CSV с транзакциями и приводит к колонкам:
+    """
+    Читает Excel/CSV с транзакциями и приводит к колонкам:
     date (datetime), amount (float), category (str), description (str), card (str)
+
+    Алгоритм:
+    1) Определяем формат по «магии» файла: ZIP ('PK') -> xlsx, OLE -> xls, иначе пробуем как текст (CSV) или xlsx.
+    2) Считываем «сырой» DataFrame без заголовков (header=None).
+    3) Находим строку‑шапку эвристикой (по ключевым словам), формируем имена колонок.
+    4) Мэппим названия колонок к ожидаемым через словарь синонимов + нормализацию.
+    5) Подчищаем и приводим типы; отбрасываем битые строки; заполняем пропуски безопасными значениями.
     """
     abs_path = resolve_project_path(path)
     logger.info("Loading Excel: %s", abs_path)
@@ -249,7 +268,7 @@ def load_transactions_xlsx(path: str | Path) -> pd.DataFrame:
             head = f.read(8)
         if head.startswith(b"PK"):
             return "xlsx"
-        if head.startswith(b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"):
+        if head.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"):
             return "xls"
         try:
             with open(p, "rb") as f:
@@ -264,7 +283,7 @@ def load_transactions_xlsx(path: str | Path) -> pd.DataFrame:
         raw = pd.read_excel(abs_path, engine="openpyxl", header=None)
     elif fmt == "xls":
         try:
-            import xlrd
+            import xlrd  # noqa: F401
         except Exception:
             raise RuntimeError("Это .xls — установи: pip install 'xlrd==1.2.0'")
         raw = pd.read_excel(abs_path, engine="xlrd", header=None)
@@ -315,15 +334,22 @@ def load_transactions_xlsx(path: str | Path) -> pd.DataFrame:
             else:
                 for c, nc in norm_cols.items():
                     if need == "date" and ("дат" in nc or "date" in nc):
-                        mapping[c] = need; break
+                        mapping[c] = need
+                        break
                     if need == "amount" and any(k in nc for k in ["sum", "сум", "amount", "debit", "credit"]):
-                        mapping[c] = need; break
+                        mapping[c] = need
+                        break
                     if need == "category" and any(k in nc for k in ["катег", "categ", "type", "тип"]):
-                        mapping[c] = need; break
-                    if need == "description" and any(k in nc for k in ["опис", "назнач", "desc", "comment", "merchant", "получател"]):
-                        mapping[c] = need; break
+                        mapping[c] = need
+                        break
+                    if need == "description" and any(
+                        k in nc for k in ["опис", "назнач", "desc", "comment", "merchant", "получател"]
+                    ):
+                        mapping[c] = need
+                        break
                     if need == "card" and any(k in nc for k in ["карт", "pan", "счет", "счёт", "account", "iban", "card"]):
-                        mapping[c] = need; break
+                        mapping[c] = need
+                        break
         return mapping
 
     mapping = build_map(df.columns.tolist())

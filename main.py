@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import pandas as pd  # type: ignore
 from argparse import ArgumentParser
 from datetime import datetime
 
@@ -27,12 +28,12 @@ def run_best(year: int, month: int, file: str) -> None:
 
 
 @save_report()
-def run_report(category: str, dt: str | None, file: str):
+def run_report(category: str, dt: str | None, file: str) -> pd.DataFrame:
     df = load_transactions_xlsx(file)
     return spending_by_category(df, category, dt)
 
 
-def main():
+def main() -> None:
     ap = ArgumentParser(description="Transactions toolkit")
     sub = ap.add_subparsers(dest="cmd")
 

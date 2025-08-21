@@ -1,5 +1,4 @@
-import json
-import pandas as pd
+import pandas as pd  # type: ignore
 import pytest
 from datetime import datetime
 from pathlib import Path
@@ -7,7 +6,7 @@ from pathlib import Path
 from src import utils
 
 
-def test_load_transactions_csv_with_header_sniff_and_dayfirst(tmp_path: Path):
+def test_load_transactions_csv_with_header_sniff_and_dayfirst(tmp_path: Path) -> None:
     # CSV с "мусорной" строкой, затем шапка по-русски и данные; дата в формате дд.мм.гггг
     csv = tmp_path / "ops.csv"
     rows = [
@@ -17,12 +16,12 @@ def test_load_transactions_csv_with_header_sniff_and_dayfirst(tmp_path: Path):
         ["01.01.2022 08:00:00", "200.00", "Пополнения", "Пополнение", "MC 2222"],
     ]
     import csv as _csv
+
     with csv.open("w", newline="", encoding="utf-8") as f:
         w = _csv.writer(f)
         w.writerows(rows)
 
     df = utils.load_transactions_xlsx(csv)
-    # Проверяем нормализацию колонок и парс дат с dayfirst=True
     assert list(df.columns) == ["date", "amount", "category", "description", "card"]
     assert df.loc[0, "date"].month == 12 and df.loc[0, "date"].day == 31
     assert float(df.loc[0, "amount"]) == -100.50
@@ -30,34 +29,32 @@ def test_load_transactions_csv_with_header_sniff_and_dayfirst(tmp_path: Path):
     assert df.loc[0, "card"].endswith("1111")
 
 
-def test_load_transactions_missing_critical_raises(tmp_path: Path):
-    # Нет колонки amount -> должно упасть
+def test_load_transactions_missing_critical_raises(tmp_path: Path) -> None:
     csv = tmp_path / "bad.csv"
     csv.write_text("Дата,Категория,Описание,Карта\n31.12.2021 12:00:00,Еда,ООО,VISA 1111", encoding="utf-8")
     with pytest.raises(ValueError):
         utils.load_transactions_xlsx(csv)
 
 
-def test_resolve_project_path_absolute_passthrough(tmp_path: Path):
+def test_resolve_project_path_absolute_passthrough(tmp_path: Path) -> None:
     abs_p = tmp_path / "abc.txt"
     assert utils.resolve_project_path(abs_p) == abs_p
 
 
-def test_read_user_settings_default_when_missing(tmp_path: Path):
-    # Передаём несуществующий абсолютный путь — должны вернуться дефолты
+def test_read_user_settings_default_when_missing(tmp_path: Path) -> None:
     missing = tmp_path / "nope.json"
     data = utils.read_user_settings(str(missing))
     assert "user_currencies" in data and "user_stocks" in data
 
 
-def test_read_user_settings_corrupted_returns_default(tmp_path: Path):
+def test_read_user_settings_corrupted_returns_default(tmp_path: Path) -> None:
     bad = tmp_path / "bad.json"
     bad.write_text("{not-json", encoding="utf-8")
     data = utils.read_user_settings(str(bad))
     assert "user_currencies" in data and "user_stocks" in data
 
 
-def test_helpers_parse_and_format_and_greeting_and_last4():
+def test_helpers_parse_and_format_and_greeting_and_last4() -> None:
     dt = utils.parse_dt("2021-12-20 13:45:00")
     assert utils.format_date(dt) == "20.12.2021"
     assert utils.human_greeting(datetime(2021, 1, 1, 6, 0, 0)) == "Доброе утро"
@@ -68,14 +65,15 @@ def test_helpers_parse_and_format_and_greeting_and_last4():
     assert utils.last4("****5678") == "5678"
 
 
-def test_filter_month_to_date():
-    df = pd.DataFrame({
-        "date": pd.to_datetime(["2021-12-01", "2021-12-15", "2022-01-05"]),
-        "amount": [-1, -2, -3],
-        "category": ["A", "B", "C"],
-        "description": ["", "", ""],
-        "card": ["x", "y", "z"]
-    })
+def test_filter_month_to_date() -> None:
+    df = pd.DataFrame(
+        {
+            "date": pd.to_datetime(["2021-12-01", "2021-12-15", "2022-01-05"]),
+            "amount": [-1, -2, -3],
+            "category": ["A", "B", "C"],
+            "description": ["", "", ""],
+            "card": ["x", "y", "z"],
+        }
+    )
     out = utils.filter_month_to_date(df, datetime(2021, 12, 20, 12, 0, 0))
     assert len(out) == 2
-

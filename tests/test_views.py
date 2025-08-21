@@ -1,13 +1,13 @@
 import json
-from datetime import datetime
+from typing import Any
 
-import pandas as pd
+import pandas as pd  # type: ignore
 import pytest
 
 import src.views as views
 
 
-def test_build_home_payload_basic(monkeypatch):
+def test_build_home_payload_basic(monkeypatch: pytest.MonkeyPatch) -> None:
     # Заглушаем внешние API
     monkeypatch.setattr(views, "get_currency_rates", lambda codes: [{"currency": c, "rate": 1.23} for c in codes])
     monkeypatch.setattr(views, "get_stock_prices", lambda codes: [{"stock": c, "price": 100.0} for c in codes])
@@ -26,34 +26,28 @@ def test_build_home_payload_basic(monkeypatch):
 
     payload = views._build_home_payload(df, at, settings)
 
-    # Приветствие
     assert payload["greeting"] == "Добрый день"
 
-    # Карты: 1111 -> 300 потрачено, кешбэк 3.00; 2222 только доход -> 0
     cards = {c["last_digits"]: c for c in payload["cards"]}
     assert "1111" in cards and "2222" in cards
     assert cards["1111"]["total_spent"] == 300.0 and cards["1111"]["cashback"] == 3.0
     assert cards["2222"]["total_spent"] == 0.0 and cards["2222"]["cashback"] == 0.0
 
-    # Сортировка по last_digits
     order = [c["last_digits"] for c in payload["cards"]]
     assert order == sorted(order)
 
-    # Топ транзакций — только в пределах 01–20.12.2021, сорт по abs(amount) убыв.
     top = payload["top_transactions"]
     assert len(top) == 2
     assert top[0]["amount"] == -200.0 and top[1]["amount"] == -100.0
 
-    # Валюты и акции — из заглушек
     assert payload["currency_rates"] == [{"currency": "USD", "rate": 1.23}, {"currency": "EUR", "rate": 1.23}]
     assert payload["stock_prices"] == [{"stock": "AAPL", "price": 100.0}]
 
 
-def test_build_home_payload_empty_month_top(monkeypatch):
-    # Без транзакций в текущем месяце — топ пустой
+def test_build_home_payload_empty_month_top(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(views, "get_currency_rates", lambda codes: [])
     monkeypatch.setattr(views, "get_stock_prices", lambda codes: [])
-    settings = {"user_currencies": [], "user_stocks": []}
+    settings: dict[str, Any] = {"user_currencies": [], "user_stocks": []}
 
     df = pd.DataFrame(
         {
@@ -69,11 +63,10 @@ def test_build_home_payload_empty_month_top(monkeypatch):
     assert payload["top_transactions"] == []
 
 
-def test_build_home_payload_cashback_rounding(monkeypatch):
-    # Проверяем округление кешбэка до 2 знаков (1% от 100.555 = 1.00555 -> 1.01)
+def test_build_home_payload_cashback_rounding(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(views, "get_currency_rates", lambda codes: [])
     monkeypatch.setattr(views, "get_stock_prices", lambda codes: [])
-    settings = {"user_currencies": [], "user_stocks": []}
+    settings: dict[str, Any] = {"user_currencies": [], "user_stocks": []}
 
     df = pd.DataFrame(
         {
@@ -91,8 +84,7 @@ def test_build_home_payload_cashback_rounding(monkeypatch):
     assert card["cashback"] == 1.01
 
 
-def test_home_view_integration_mocks_io(monkeypatch):
-    # Подменяем чтение настроек и файла, а также API
+def test_home_view_integration_mocks_io(monkeypatch: pytest.MonkeyPatch) -> None:
     df = pd.DataFrame(
         {
             "date": pd.to_datetime(["2021-12-16", "2021-12-20"]),
@@ -116,7 +108,7 @@ def test_home_view_integration_mocks_io(monkeypatch):
     assert any(c["last_digits"] == "1234" for c in payload["cards"])
 
 
-def test_home_view_with_df(monkeypatch):
+def test_home_view_with_df(monkeypatch: pytest.MonkeyPatch) -> None:
     df = pd.DataFrame(
         {
             "date": pd.to_datetime(["2021-12-20"]),
@@ -134,4 +126,3 @@ def test_home_view_with_df(monkeypatch):
     payload = json.loads(out)
     assert payload["greeting"] == "Добрый вечер"
     assert payload["cards"][0]["last_digits"] == "1111"
-
