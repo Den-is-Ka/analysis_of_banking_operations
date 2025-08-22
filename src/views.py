@@ -7,17 +7,8 @@ from typing import Any
 
 import pandas as pd  # type: ignore
 
-from src.utils import (
-    filter_month_to_date,
-    format_date,
-    get_currency_rates,
-    get_stock_prices,
-    human_greeting,
-    last4,
-    load_transactions_xlsx,
-    parse_dt,
-    read_user_settings,
-)
+from src.utils import (filter_month_to_date, format_date, get_currency_rates, get_stock_prices, human_greeting, last4,
+                       load_transactions_xlsx, parse_dt, read_user_settings)
 
 logger = logging.getLogger(__name__)
 

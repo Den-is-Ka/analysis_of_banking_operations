@@ -11,6 +11,7 @@ from typing import Any, Iterable, cast
 import pandas as pd  # type: ignore
 import requests  # type: ignore
 from dotenv import load_dotenv
+
 # import xlrd  # noqa: F401
 
 load_dotenv()

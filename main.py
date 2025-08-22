@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import json
 import logging
-import pandas as pd  # type: ignore
 from argparse import ArgumentParser
 from datetime import datetime
 
+import pandas as pd  # type: ignore
 
 from src.reports import save_report, spending_by_category
 from src.services import best_cashback_categories

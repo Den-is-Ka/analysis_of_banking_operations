@@ -1,7 +1,7 @@
 
 import json
 
-from src.services import best_cashback_categories, CASHBACK_RATE
+from src.services import CASHBACK_RATE, best_cashback_categories
 
 
 def test_best_cashback_basic_aggregation_and_month_filter() -> None:

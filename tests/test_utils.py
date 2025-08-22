@@ -1,10 +1,10 @@
-import os
 import json
-from types import SimpleNamespace
+import os
 from datetime import datetime
-
-from typing import Any, Optional
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, Optional
+
 import pandas as pd  # type: ignore
 import pytest
 

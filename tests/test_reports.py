@@ -1,7 +1,8 @@
-import pandas as pd  # type: ignore
-import pytest
 from datetime import datetime
 from pathlib import Path
+
+import pandas as pd  # type: ignore
+import pytest
 
 from src import utils
 
